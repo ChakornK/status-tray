@@ -1652,37 +1652,79 @@ const TrayItem = GObject.registerClass({
 });
 
 const OverflowButton = GObject.registerClass(
-class OverflowButton extends PanelMenu.Button {
-    _init(extensionPath, settings) {
-        super._init(0.0, 'StatusTray-Overflow');
+    class OverflowButton extends PanelMenu.Button {
+        _init(extensionPath, settings) {
+            super._init(0.0, 'StatusTray-Overflow');
 
-        this._extensionPath = extensionPath;
-        this._settings = settings;
+            this._extensionPath = extensionPath;
+            this._settings = settings;
 
-        this._icon = new St.Icon({
-            style_class: 'system-status-icon status-tray-icon',
-        });
-        this.add_child(this._icon);
-        this.add_style_class_name('status-tray-button');
-        this.add_style_class_name('status-tray-overflow-button');
+            this._icon = new St.Icon({
+                style_class: 'system-status-icon status-tray-icon',
+            });
+            this.add_child(this._icon);
+            this.add_style_class_name('status-tray-button');
+            this.add_style_class_name('status-tray-overflow-button');
 
-        this.updateOverflowIcon();
+            this._dockPosition = this._detectDockPosition();
+            this._updateChevron(false);
 
-        // Rows keyed by the source TrayItem so we can update in place on
-        // display-changed signals without rebuilding the whole submenu.
-        this._rows = new Map();
-    }
+            this._menuOpenId = this.menu.connect('open-state-changed', (_menu, isOpen) => {
+                this._updateChevron(isOpen);
+            });
 
-    updateOverflowIcon() {
-        const mode = this._settings?.get_string('icon-mode') ?? 'symbolic';
-        const fileName = mode === 'symbolic'
-            ? 'status-tray-symbolic.svg'
-            : 'status-tray.svg';
-        const file = Gio.File.new_for_path(
-            GLib.build_filenamev([this._extensionPath, 'icons', fileName])
-        );
-        this._icon.set_gicon(new Gio.FileIcon({ file }));
-    }
+            this._rows = new Map();
+        }
+
+        _detectDockPosition() {
+            try {
+                const dtdSchema = Gio.SettingsSchemaSource.get_default()?.lookup(
+                    'org.gnome.shell.extensions.dash-to-dock', false
+                );
+                if (dtdSchema) {
+                    const dtdSettings = new Gio.Settings({ schema: dtdSchema.get_id() });
+                    const pos = dtdSettings.get_string('dock-position');
+                    if (['left', 'right', 'bottom', 'top'].includes(pos))
+                        return pos;
+                }
+            } catch (_e) { }
+
+            try {
+                const cosmicSchema = Gio.SettingsSchemaSource.get_default()?.lookup(
+                    'org.gnome.shell.extensions.cosmic-dock', false
+                );
+                if (cosmicSchema) {
+                    const cosmicSettings = new Gio.Settings({ schema: cosmicSchema.get_id() });
+                    const pos = cosmicSettings.get_string('dock-position');
+                    if (['left', 'right', 'bottom', 'top'].includes(pos))
+                        return pos;
+                }
+            } catch (_e) { }
+
+            return 'top';
+        }
+
+        _updateChevron(menuOpen) {
+            const dock = this._dockPosition;
+            let iconName;
+
+            if (dock === 'top') {
+                iconName = menuOpen ? 'pan-up-symbolic' : 'pan-down-symbolic';
+            } else if (dock === 'bottom') {
+                iconName = menuOpen ? 'pan-down-symbolic' : 'pan-up-symbolic';
+            } else if (dock === 'left') {
+                iconName = menuOpen ? 'pan-start-symbolic' : 'pan-end-symbolic';
+            } else {
+                iconName = menuOpen ? 'pan-end-symbolic' : 'pan-start-symbolic';
+            }
+
+            this._icon.set_icon_name(iconName);
+        }
+
+        updateOverflowIcon() {
+            this._dockPosition = this._detectDockPosition();
+            this._updateChevron(this.menu.isOpen);
+        }
 
     setOverflowedItems(trayItems) {
         // Disconnect from any TrayItems no longer in the overflow set before
@@ -1759,12 +1801,16 @@ class OverflowButton extends PanelMenu.Button {
         this._seedPlaceholder(subItem.menu);
     }
 
-    destroy() {
-        for (const trayItem of this._rows.keys())
-            trayItem.disconnectObject(this);
-        this._rows.clear();
-        super.destroy();
-    }
+        destroy() {
+            if (this._menuOpenId && this.menu) {
+                this.menu.disconnect(this._menuOpenId);
+                this._menuOpenId = 0;
+            }
+            for (const trayItem of this._rows.keys())
+                trayItem.disconnectObject(this);
+            this._rows.clear();
+            super.destroy();
+        }
 });
 
 class StatusNotifierWatcher {
