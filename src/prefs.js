@@ -1598,9 +1598,9 @@ export default class StatusTrayPreferences extends ExtensionPreferences {
 
         const overflowCountRow = new Adw.SpinRow({
             title: 'Inline icon limit',
-            subtitle: 'How many icons stay in the panel before the rest overflow',
+            subtitle: 'How many icons stay in the panel before the rest overflow. Set to 0 to move all icons into the overflow menu',
             adjustment: new Gtk.Adjustment({
-                lower: 1,
+                lower: 0,
                 upper: 20,
                 step_increment: 1,
                 page_increment: 1,

@@ -2625,7 +2625,7 @@ export default class StatusTrayExtension extends Extension {
             return;
 
         const enabled = this._settings.get_boolean('overflow-enabled');
-        const inlineCount = Math.max(1, this._settings.get_int('overflow-inline-count'));
+        const inlineCount = Math.max(0, this._settings.get_int('overflow-inline-count'));
 
         const entries = [...this._items.values()];
         const rightBox = Main.panel._rightBox;
